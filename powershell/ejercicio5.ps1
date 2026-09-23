@@ -95,7 +95,6 @@ function Get-Cache(){
     }
     else{
         New-Item -Path $rutaCache -ItemType File
-        $encontrados = @()
     }
 
     return $encontrados
