@@ -1,10 +1,35 @@
 #!/bin/bash
 
+
+#INTEGRANTES:
+#    - Argain Tobias, 42998669
+#    - Aristimuño Iara, 45237225
+#    - Gambaro Guadalupe, 45206331
+#    - Mazzeo Ariana, 42774818
+#    - Melissari Pedro, 46912033
+
+
 function ayuda(){
-    echo "Ayuda"
+    echo "Uso: ./swapi.sh [opciones]"
+    echo ""
+    echo "Opciones:"
+    echo "  -p, --people <ids>    Buscar personajes por id. Pueden enviarse múltiples ids separados por coma."
+    echo "  -f, --film <ids>      Buscar películas por id. Pueden enviarse múltiples ids separados por coma."
+    echo "  -h, --help            Muestra este mensaje de ayuda."
+    echo ""
+    echo "Ejemplos:"
+    echo "  ./swapi.sh -p 1,2"
+    echo "  ./swapi.sh -f 1,2"
+    echo "  ./swapi.sh -p 1,2 -f 1,2"
+    echo "  ./swapi.sh --people 1,2 --film 1,2"
+    echo ""
+    echo "Descripción:"
+    echo "  Script que permite buscar información del mundo de Star Wars por ID de personaje o película."
+    echo "  Realiza consultas a la API swapi.tech y guarda los resultados en una caché local (formato JSONL)
+    para evitar consultar nuevamente la api. Muestra por pantalla la información básica de cada resultado."
 }
 
-options=$(getopt -o p:f:h --l people:,film:help -- "$@" 2> /dev/null)
+options=$(getopt -o p:f:h --l people:,film:,help -- "$@" 2> /dev/null)
 
 if [ "$?" != "0" ]
 then
@@ -117,7 +142,13 @@ function get_api(){
 
     for id in ${ids[@]}
     do
-        local respuesta=$(wget -qO- "${url}${id}" | jq -c '.result')
+        local respuesta=$(wget -qO- "${url}${id}" | jq -c '.result' 2>/dev/null)
+
+        if [ "$?" -ne 0 ] || [ -z "$respuesta" ]
+        then
+            echo -e "${RED}Error: No se pudo obtener el id $id de la API${RESET}" >&2
+            continue
+        fi
         response+=($respuesta)
     done
 
@@ -226,16 +257,22 @@ function main(){
     validar_parametros 
     if [ -n "$peoples" ]
     then
-        #get_personajes_by_id ${peoples[@]}
         personajes=($(get_personajes_by_id ${peoples[@]}))
-        echo_personajes ${personajes[@]}
+        count_personajes=${#personajes[@]}
+        if [ $count_personajes -gt 0 ]
+        then
+            echo_personajes ${personajes[@]}
+        fi
     fi
 
     if [ -n "$films" ]
     then
-        #get_peliculas_by_id ${films[@]}
         peliculas=($(get_peliculas_by_id ${films[@]}))
-        echo_peliculas ${peliculas[@]}
+        count_peliculas=${#peliculas[@]}
+        if [ $count_peliculas -gt 0 ]
+        then
+            echo_peliculas ${peliculas[@]}
+        fi
     fi
 }
 
