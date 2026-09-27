@@ -205,7 +205,17 @@ function echo_personajes(){
     local personajes=("$@")
 
     echo "LISTADO PERSONAJES"
-    echo ${personajes[@]} | jq -s 'sort_by(.Id | tonumber)[]'
+    echo ${personajes[@]} | jq -r '[.] 
+    |sort_by(.Id | tonumber)
+    | .[]
+    |"-------------------------------
+ Id: \(.Id)
+ Name: \(.Name)
+ Gender: \(.Gender)
+ Heigth: \(.Heigth)
+ Mass: \(.Mass)
+ Birth year: \(.Birth_year)
+    "'
 }
 #------------------- FUNCIONES PELICULAS --------------------
 function get_peliculas_formateadas(){
@@ -248,7 +258,16 @@ function echo_peliculas(){
     local peliculas=("$@")
 
     echo "LISTADO PELICULAS"
-    echo ${peliculas[@]} | jq -s 'sort_by(.Id | tonumber)[]'
+    echo ${peliculas[@]} | jq -r '[.] 
+    | sort_by(.Id | tonumber)
+    | .[] 
+    | "-------------------------------------
+ Id: \(.Id)
+ Title: \(.Title)
+ Episode id: \(.Episode_id)
+ Release date: \(.Release_date)
+ Opening crawl: \(.Opening_crawl)
+    "'
 }
 
 
