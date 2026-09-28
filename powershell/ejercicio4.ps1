@@ -44,7 +44,8 @@
     Detiene el proceso demonio que monitorea el directorio ../monitor.
 #>
 
-param(
+[CmdletBinding(DefaultParameterSetName = 'iniciar')]
+param(   
     [Parameter(Mandatory = $true, ParameterSetName = 'iniciar')]
     [Parameter(Mandatory = $true, ParameterSetName = 'finalizar')]
     [ValidateScript({
@@ -79,6 +80,9 @@ function Main {
     }   
     elseif ($jobExistente -and -not $kill) {
         Write-Host "Ya hay un proceso monitoreando ese directorio"
+    }
+    elseif (-not $salida) {
+        Write-Host "Debe indicar un directorio de salida con -salida para iniciar el monitoreo"
     }
     else {
         Start-Monitoreo -directorio "$directorio" -salida $salida
@@ -163,4 +167,4 @@ function Start-Monitoreo {
     }
 }
 
-Main -directorio "$directorio" -salida $salida
+Main
