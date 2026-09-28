@@ -1,10 +1,67 @@
+<#
+     INTEGRANTES:
+        - Argain Tobias, 42998669
+        - Aristimuño Iara, 45237225
+        - Gambaro Guadalupe, 45206331
+        - Mazzeo Ariana, 42774818
+        - Melissari Pedro, 46912033
+#>
+
+<#
+.SYNOPSIS
+    Script que monitorea la creacion de archivos en un directorio buscando duplicados y genera backups con ellos, si los hay.
+
+.DESCRIPTION
+    Este script crea un proceso demonio en segundo plano que monitorea un directorio 
+    y sus subdirectorios usando FileSystemWatcher. Cuando detecta que se creó un 
+    archivo duplicado (mismo nombre y tamaño que otro existente), genera un log con 
+    las rutas de los duplicados y los archiva en un archivo .zip con el formato 
+    de nombre "yyyyMMdd-HHmmss" en el directorio de salida indicado.
+
+    El script puede ejecutarse nuevamente con -kill para detener el demonio iniciado
+    sobre un directorio específico. No se puede iniciar más de un demonio para el 
+    mismo directorio al mismo tiempo.
+
+.PARAMETER directorio
+    Ruta del directorio a monitorear, incluyendo sus subdirectorios.
+    Acepta rutas absolutas, relativas y rutas con espacios siempre y cuando se envien entre "".
+    Parametro obligatorio.
+
+.PARAMETER salida
+    Ruta del directorio donde se van a crear los archivos de backup comprimidos (.zip).
+    No se puede usar junto con -kill.
+
+.PARAMETER kill
+    Detiene el proceso demonio previamente iniciado para el directorio indicado.
+    Solo se puede usar junto con -directorio.
+
+.EXAMPLE
+    ./ejercicio4.ps1 -directorio "../monitor" -salida "../salida"
+    Inicia el monitoreo del directorio ../monitor y guarda los backups en ../salida.
+
+.EXAMPLE
+    ./ejercicio4.ps1 -directorio "../monitor" -kill
+    Detiene el proceso demonio que monitorea el directorio ../monitor.
+#>
 
 param(
     [Parameter(Mandatory = $true, ParameterSetName = 'iniciar')]
     [Parameter(Mandatory = $true, ParameterSetName = 'finalizar')]
+    [ValidateScript({
+        if( -not (Test-Path $_ -PathType Container)){
+            throw "El directorio '$_' no existe o no es valido"
+        }
+        return $true
+    })]
     [string]
     $directorio,
     [Parameter(Mandatory = $false, ParameterSetName = 'iniciar')]
+     [ValidateScript({
+        if( -not (Test-Path $_ -PathType Container)){
+            throw "El directorio '$_' no existe o no es valido"
+        }
+        return $true
+    })]
     [string]
     $salida,
     [Parameter(Mandatory = $false, ParameterSetName = 'finalizar')]
@@ -13,20 +70,19 @@ param(
 
 function Main {
 
-    $jobExistente = Get-Job -Name $directorio -ErrorAction SilentlyContinue
+    $jobExistente = Get-Job -Name "$directorio" -ErrorAction SilentlyContinue
     if ($kill -and $jobExistente) {
-        Stop-Monitoreo -directorio $directorio 
+        Stop-Monitoreo -directorio "$directorio" 
     }
     elseif ($kill -and -not $jobExistente) {
         Write-Host "No hay ningun proceso de monitoreo activo para ese directorio"
     }   
-    elseif ($jobExistente) {
+    elseif ($jobExistente -and -not $kill) {
         Write-Host "Ya hay un proceso monitoreando ese directorio"
     }
     else {
-        Start-Monitoreo -directorio $directorio -salida $salida
+        Start-Monitoreo -directorio "$directorio" -salida $salida
     }
-
 }
 
 function Stop-Monitoreo {
@@ -34,8 +90,8 @@ function Stop-Monitoreo {
         $directorio
     )
 
-    Stop-Job -Name $directorio
-    Remove-Job -Name $directorio
+    Stop-Job -Name "$directorio"
+    Remove-Job -Name "$directorio"
 }
 
 function Start-Monitoreo {
@@ -44,7 +100,7 @@ function Start-Monitoreo {
         $salida
     )
 
-    Start-Job -Name $directorio -ArgumentList $directorio, $salida -ScriptBlock {
+    Start-Job -Name "$directorio" -ArgumentList "$directorio", $salida -ScriptBlock {
         param($dir, $sal)
         
         $fw = New-Object System.IO.FileSystemWatcher;
@@ -61,22 +117,16 @@ function Start-Monitoreo {
                 $nombre,
                 $salida
             )
-            #New-Item -Path $archivo -ItemType Directory
 
             Add-Content -Path "/tmp/log.txt" -Value "$nombre"
             foreach ($duplicado in $duplicados) {
                 Add-Content -Path "/tmp/log.txt" -Value "$($duplicado.DirectoryName)"
-                #Copy-Item -Path $(duplicado.FullName) $archivo
             }
             $rutasDuplicados = @($duplicados.FullName)
             $rutasDuplicados += "/tmp/log.txt"
             $fecha = Get-Date -Format "yyyyMMdd-HHmmss"
             $archivoZip = "$salida/$fecha.zip"
-            #$archivosAComprimir = @("/tmp/log.txt") + $rutasDuplicados
             Compress-Archive -Path $rutasDuplicados -DestinationPath $archivoZip
-
-
-            Remove-Item -Path "/tmp/log.txt"
  
         }
         function Get-Duplicados {
@@ -88,8 +138,7 @@ function Start-Monitoreo {
             )
 
             $duplicados = Get-ChildItem -Path $ruta -Recurse -File | Where-Object { $_.Name -eq $nombre -and $_.Size -eq $tamanio }
-            New-BackUp -duplicados $duplicados -nombre $nombre -salida $salida
-            
+            return $duplicados
         }
         while ($true) {
             $evento = Wait-Event 
@@ -98,11 +147,20 @@ function Start-Monitoreo {
             $nombre = ($evento.SourceArgs.FullPath | Get-ChildItem).Name
             $tamanio = ($evento.SourceArgs.FullPath | Get-ChildItem).Size
 
-            Get-Duplicados -nombre $nombre -tamanio $tamanio -ruta $dir -salida $sal
-        }
-
-        
+            $duplicados = Get-Duplicados -nombre $nombre -tamanio $tamanio -ruta $dir -salida $sal
+            if ($duplicados.Count -gt 1) {
+                try{
+                    New-BackUp -duplicados $duplicados -nombre $nombre -salida $sal
+                } catch {
+                    Write-Host "Ocurrió un error al generar el backup: $_"
+                } finally {
+                    if(Test-Path "/tmp/log.txt"){
+                        Remove-Item -Path "/tmp/log.txt"
+                    }
+                }  
+            }
+        }  
     }
-
 }
-Start-Monitoreo -directorio $directorio -salida $salida
+
+Main -directorio "$directorio" -salida $salida
